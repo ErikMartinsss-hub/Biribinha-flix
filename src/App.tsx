@@ -78,6 +78,8 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [showCarouselModal, setShowCarouselModal] = useState(false)
   const [trendingAll, setTrendingAll] = useState<TMDBItem[]>([])
+  const [searchResults, setSearchResults] = useState<TMDBItem[]>([])
+  const [searching, setSearching] = useState(false)
   const [featuredIndex, setFeaturedIndex] = useState(0)
   const heroTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const heroData = rows.slice(4, 7).flatMap(r => r.data).filter((_, i) => i < 5) || []
@@ -147,6 +149,22 @@ export default function App() {
     }
   }, [heroData.length])
 
+  // Search via TMDB API
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setSearchResults([])
+      return
+    }
+    const timer = setTimeout(() => {
+      setSearching(true)
+      tmdbApi.get('/search/multi', { params: { query: searchTerm } })
+        .then(res => setSearchResults(res.data.results.slice(0, 20)))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearching(false))
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
   const handleItemClick = useCallback((item: TMDBItem) => {
     const isMovie = !!item.title || item.media_type === 'movie'
     setDetailContent({ id: item.id, type: isMovie ? 'movie' : 'tv', label: isMovie ? 'filmes' : 'series' })
@@ -182,13 +200,6 @@ export default function App() {
   const filteredHistory = history.filter(h =>
     h.title.toLowerCase().includes(searchTerm.toLowerCase())
   )
-
-  const allFilteredRows = rows.map(row => ({
-    ...row,
-    data: row.data.filter(item =>
-      (item.title || item.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-  })).filter(row => row.data.length > 0)
 
   // --- Carousel Modal ---
   const CarouselModal = () => {
@@ -517,9 +528,50 @@ export default function App() {
             </div>
           )}
 
-          {allFilteredRows.map(row => <Row key={row.title} {...row} />)}
-
-          {allFilteredRows.length === 0 && filteredHistory.length === 0 && (
+          {searching ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 border-3 border-[#00A8E1] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+              {searchResults.filter(item => item.media_type !== 'person').map(item => {
+                const title = item.title || item.name || ''
+                const isMovie = item.media_type === 'movie'
+                return (
+                  <div
+                    key={item.id}
+                    className="group cursor-pointer"
+                    onClick={() => {
+                      setDetailContent({ id: item.id, type: isMovie ? 'movie' : 'tv', label: isMovie ? 'filmes' : 'series' })
+                    }}
+                  >
+                    <div className="relative aspect-[2/3] rounded-lg md:rounded-xl overflow-hidden bg-[#1a242f] transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-[#00A8E1]/15">
+                      {item.poster_path ? (
+                        <img src={tmdbImg(item.poster_path)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[#5a6a78] text-xs font-bold px-2">{title}</div>
+                      )}
+                      <div className="absolute top-1.5 right-1.5 bg-black/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] font-bold text-yellow-500 flex items-center gap-1">
+                        <Star size={7} fill="currentColor" /> {item.vote_average?.toFixed(1)}
+                      </div>
+                      <div className="absolute top-1.5 left-1.5 bg-[#00A8E1]/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[9px] font-bold text-white">
+                        {isMovie ? 'FILME' : 'SÉRIE'}
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-[#00A8E1]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="bg-white text-[#0f171e] p-2.5 md:p-3 rounded-full shadow-lg shadow-black/50">
+                          <Play size={16} />
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-1.5 text-[10px] md:text-[11px] text-[#8197a4] font-bold truncate">{title}</p>
+                    {item.release_date || item.first_air_date ? (
+                      <p className="text-[#5a6a78] text-[9px] truncate">{(item.release_date || item.first_air_date || '').split('-')[0]}</p>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
             <div className="flex flex-col items-center justify-center py-20 text-[#5a6a78]">
               <Search size={40} className="mb-4" />
               <p className="text-sm font-bold">Nenhum resultado encontrado.</p>
