@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, MonitorPlay, ChevronDown, ChevronUp } from 'lucide-react'
 import tmdbApi from '../api/tmdb'
+import { getChannelUrl } from '../data/channels'
 
 interface PlayerProps {
   id: number
-  type: 'filme' | 'serie'
+  type: 'filme' | 'serie' | 'canal'
   title: string
   season?: number
   episode?: number
+  slug?: string
   onBack: () => void
 }
 
-export default function PlayerPage({ id, type, title, season, episode, onBack }: PlayerProps) {
+export default function PlayerPage({ id, type, title, season, episode, slug, onBack }: PlayerProps) {
   const [activeSeason, setActiveSeason] = useState(season ?? 1)
   const [activeEpisode, setActiveEpisode] = useState(episode ?? 1)
   const [totalSeasons, setTotalSeasons] = useState(1)
@@ -20,7 +22,10 @@ export default function PlayerPage({ id, type, title, season, episode, onBack }:
   const [loading, setLoading] = useState(true)
 
   const isSeries = type === 'serie'
-  const embedUrl = `https://superflixapi.online/${isSeries ? `serie/${id}/${activeSeason}/${activeEpisode}` : `filme/${id}`}`
+  const isChannel = type === 'canal'
+  const embedUrl = isChannel
+    ? getChannelUrl(slug || '')
+    : `https://superflixapi.online/${isSeries ? `serie/${id}/${activeSeason}/${activeEpisode}` : `filme/${id}`}`
 
   useEffect(() => {
     if (!isSeries) return
@@ -39,12 +44,38 @@ export default function PlayerPage({ id, type, title, season, episode, onBack }:
     })
   }, [id, activeSeason, isSeries])
 
-  // Bloqueia popups de anuncio sem atrapalhar o video
+  // Retorna janela fake no window.open + aplica sandbox apos o video carregar
   useEffect(() => {
-    const originalOpen = window.open.bind(window)
-    window.open = () => null
-    return () => { window.open = originalOpen }
-  }, [])
+    const origOpen = window.open.bind(window)
+    window.open = () => {
+      const win: any = {
+        closed: false,
+        document: { write: () => {}, close: () => {} },
+        close: () => { win.closed = true },
+        focus: () => {},
+        blur: () => {},
+        location: { href: '', replace: () => {}, assign: () => {} },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        postMessage: () => {},
+      }
+      return win
+    }
+
+    // Aplica sandbox no iframe apos o video ja ter carregado
+    // Isso bloqueia popups sem impedir o video de iniciar
+    const timer = setTimeout(() => {
+      const iframe = document.querySelector('iframe')
+      if (iframe && !iframe.hasAttribute('sandbox')) {
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation')
+      }
+    }, 3000)
+
+    return () => {
+      window.open = origOpen
+      clearTimeout(timer)
+    }
+  }, [embedUrl])
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -59,7 +90,7 @@ export default function PlayerPage({ id, type, title, season, episode, onBack }:
           <span className="text-sm font-bold truncate max-w-[200px]">{title}</span>
         </button>
 
-        {isSeries && (
+        {!isChannel && isSeries && (
           <div className="relative">
             <button
               type="button"

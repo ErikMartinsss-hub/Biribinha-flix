@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Search, Star, MonitorPlay, Film, Tv, X, ChevronRight, Clock, Sparkles, ChevronLeft, Info, TrendingUp, Award, Flame, Eye } from 'lucide-react'
+import { Play, Search, Star, MonitorPlay, Film, Tv, X, ChevronRight, Clock, Sparkles, ChevronLeft, Info, TrendingUp, Award, Flame, Eye, Radio } from 'lucide-react'
 import tmdbApi from './api/tmdb'
 import Details from './pages/Details'
 import PlayerPage from './pages/Player'
+import { CHANNELS } from './data/channels'
 
 interface TMDBItem {
   id: number
@@ -35,6 +36,7 @@ const CATEGORIES = [
   { id: 'animes', label: 'Animes', icon: MonitorPlay, type: 'tv', prefix: 'ANIMES' },
   { id: 'filmes', label: 'Filmes', icon: Film, type: 'movie', prefix: 'FILMES' },
   { id: 'series', label: 'Séries', icon: Tv, type: 'tv', prefix: 'SÉRIES' },
+  { id: 'canais', label: 'Canais', icon: Radio, type: 'tv', prefix: 'CANAIS' },
 ] as const
 
 const ROWS_CONFIG = [
@@ -102,14 +104,17 @@ export default function App() {
       const allRows: RowData[] = []
 
       for (const cat of CATEGORIES) {
-        const catRows = CATEGORY_ROWS[cat.id]
+        const catRows = (CATEGORY_ROWS as any)[cat.id]
+
+        if (!catRows) continue // Pula categorias sem config de busca (ex: canais)
+
         const discoverEndpoint = `/discover/${cat.type}`
         try {
           const results = await Promise.all(
-            catRows.map(row => tmdbApi.get(discoverEndpoint, { params: row.params }))
+            catRows.map((row: any) => tmdbApi.get(discoverEndpoint, { params: row.params }))
           )
           if (cancelled) return
-          results.forEach((res, i) => {
+          results.forEach((res: any, i: number) => {
             allRows.push({
               categoryId: cat.id,
               title: `${cat.prefix} • ${ROWS_CONFIG[i].title}`,
@@ -119,6 +124,28 @@ export default function App() {
         } catch (e) {
           console.error(`Erro ao carregar ${cat.label}`, e)
         }
+      }
+
+      // Adiciona canais de TV agrupados por categoria
+      for (const chCat of ['Filmes e Séries', 'Esportes', 'Notícias', 'Infantil', 'Documentários', 'Música', 'Abertos']) {
+        const filtered = CHANNELS.filter(c => c.category === chCat)
+        if (filtered.length === 0) continue
+        allRows.push({
+          categoryId: 'canais',
+          title: `CANAIS • ${chCat.toUpperCase()}`,
+          data: filtered.map(ch => ({
+            id: ch.id as any,
+            name: ch.name,
+            title: ch.name,
+            poster_path: null,
+            backdrop_path: null,
+            vote_average: 0,
+            overview: ch.category,
+            media_type: 'canal',
+            // Campo customizado para identificar o slug
+            ...({ slug: ch.slug } as any),
+          })),
+        })
       }
 
       if (!cancelled) {
@@ -165,7 +192,11 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  const handleItemClick = useCallback((item: TMDBItem) => {
+  const handleItemClick = useCallback((item: TMDBItem & { slug?: string }) => {
+    if (item.media_type === 'canal') {
+      setPlayerContent({ id: 0, type: 'canal', title: item.name || item.title || '', slug: item.slug })
+      return
+    }
     const isMovie = !!item.title || item.media_type === 'movie'
     setDetailContent({ id: item.id, type: isMovie ? 'movie' : 'tv', label: isMovie ? 'filmes' : 'series' })
   }, [])
@@ -340,16 +371,31 @@ export default function App() {
                   className="relative aspect-[2/3] rounded-lg md:rounded-xl overflow-hidden bg-[#1a242f] transition-all duration-300 group-hover/card:scale-105 group-hover/card:shadow-xl group-hover/card:shadow-[#00A8E1]/15 border border-transparent hover:border-[#00A8E1]/30"
                   onClick={() => handleItemClick(item)}
                 >
-                  {item.poster_path ? (
+                  {(item as any).media_type === 'canal' ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#1a242f] to-[#0f171e]">
+                      <Radio size={28} className="text-[#00A8E1]" />
+                      <span className="text-white font-black text-xs text-center px-2 leading-tight">
+                        {(item as any).name || (item as any).title}
+                      </span>
+                      <span className="text-[#00A8E1] text-[9px] font-bold tracking-widest">AO VIVO</span>
+                    </div>
+                  ) : item.poster_path ? (
                     <img src={tmdbImg(item.poster_path)} alt="" className="w-full h-full object-cover" loading="lazy" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[#5a6a78] text-xs font-bold px-2 text-center">
                       {item.title || item.name}
                     </div>
                   )}
-                  <div className="absolute top-1.5 right-1.5 bg-black/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] font-bold text-yellow-500 flex items-center gap-1">
-                    <Star size={7} fill="currentColor" /> {item.vote_average?.toFixed(1)}
-                  </div>
+                  {(item as any).media_type !== 'canal' && (
+                    <div className="absolute top-1.5 right-1.5 bg-black/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] font-bold text-yellow-500 flex items-center gap-1">
+                      <Star size={7} fill="currentColor" /> {item.vote_average?.toFixed(1)}
+                    </div>
+                  )}
+                  {(item as any).media_type === 'canal' && (
+                    <div className="absolute top-1.5 left-1.5 bg-[#00A8E1] px-1.5 py-0.5 rounded text-[9px] font-bold text-white tracking-wider flex items-center gap-1">
+                      <Radio size={8} /> AO VIVO
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-[#00A8E1]/10 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="bg-white text-[#0f171e] p-2.5 md:p-3 rounded-full shadow-lg shadow-black/50 transform scale-90 group-hover/card:scale-100 transition-transform">
                       <Play size={16} />
@@ -367,7 +413,7 @@ export default function App() {
     )
   }
 
-  const handlePlay = useCallback((c: { id: number; type: 'filme' | 'serie'; title: string; season?: number; episode?: number }) => {
+  const handlePlay = useCallback((c: { id: number; type: 'filme' | 'serie' | 'canal'; title: string; season?: number; episode?: number; slug?: string }) => {
     setPlayerContent(c)
   }, [])
 
@@ -380,6 +426,7 @@ export default function App() {
         title={playerContent.title}
         season={playerContent.season}
         episode={playerContent.episode}
+        slug={playerContent.slug}
         onBack={() => setPlayerContent(null)}
       />
     )
@@ -571,12 +618,50 @@ export default function App() {
                 )
               })}
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-[#5a6a78]">
-              <Search size={40} className="mb-4" />
-              <p className="text-sm font-bold">Nenhum resultado encontrado.</p>
-            </div>
-          )}
+          ) : null}
+
+          {/* CANAIS - busca local */}
+          {(() => {
+            const q = searchTerm.toLowerCase()
+            const found = CHANNELS.filter(c => c.name.toLowerCase().includes(q) || c.category.toLowerCase().includes(q))
+            if (found.length === 0) return null
+            return (
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <Radio size={14} className="text-[#00A8E1]" />
+                  <h3 className="text-[#8197a4] font-bold text-xs md:text-sm">CANAIS</h3>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+                  {found.map(ch => (
+                    <div
+                      key={ch.id}
+                      className="group cursor-pointer"
+                      onClick={() => setPlayerContent({ id: 0, type: 'canal', title: ch.name, slug: ch.slug })}
+                    >
+                      <div className="relative aspect-[2/3] rounded-lg md:rounded-xl overflow-hidden bg-gradient-to-br from-[#1a242f] to-[#0f171e] transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-[#00A8E1]/15 flex flex-col items-center justify-center gap-2">
+                        <Radio size={28} className="text-[#00A8E1]" />
+                        <span className="text-white font-black text-xs text-center px-2 leading-tight">{ch.name}</span>
+                        <span className="text-[#00A8E1] text-[9px] font-bold tracking-widest">{ch.category}</span>
+                      </div>
+                      <p className="mt-1.5 text-[10px] md:text-[11px] text-[#8197a4] font-bold truncate">{ch.name}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          {searchResults.length === 0 && (() => {
+            const q = searchTerm.toLowerCase()
+            const hasChannels = CHANNELS.some(c => c.name.toLowerCase().includes(q))
+            if (hasChannels) return null
+            return (
+              <div className="flex flex-col items-center justify-center py-20 text-[#5a6a78]">
+                <Search size={40} className="mb-4" />
+                <p className="text-sm font-bold">Nenhum resultado encontrado.</p>
+              </div>
+            )
+          })()}
         </main>
       ) : (
         /* MAIN CONTENT */
