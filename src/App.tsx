@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Search, Star, MonitorPlay, Film, Tv, X, ChevronRight, Clock, Sparkles, ChevronLeft, Info, TrendingUp, Award, Flame, Eye, Radio } from 'lucide-react'
+import { Play, Search, Star, MonitorPlay, Film, Tv, X, ChevronRight, Clock, Sparkles, ChevronLeft, Info, TrendingUp, Award, Flame, Eye, Radio, Zap } from 'lucide-react'
 import tmdbApi from './api/tmdb'
 import Details from './pages/Details'
 import PlayerPage from './pages/Player'
-import { CHANNELS } from './data/channels'
+import { CHANNELS, toSlug } from './data/channels'
+import * as reidos from './api/reidosembeds'
 
 interface TMDBItem {
   id: number
@@ -37,6 +38,7 @@ const CATEGORIES = [
   { id: 'filmes', label: 'Filmes', icon: Film, type: 'movie', prefix: 'FILMES' },
   { id: 'series', label: 'Séries', icon: Tv, type: 'tv', prefix: 'SÉRIES' },
   { id: 'canais', label: 'Canais', icon: Radio, type: 'tv', prefix: 'CANAIS' },
+  { id: 'eventos', label: 'Eventos', icon: Zap, type: 'tv', prefix: 'EVENTOS' },
 ] as const
 
 const ROWS_CONFIG = [
@@ -69,6 +71,21 @@ const CATEGORY_ROWS: Record<string, { params: Record<string, string> }[]> = {
 
 const tmdbImg = (path: string | null, size = 'w500') => path ? `https://image.tmdb.org/t/p/${size}${path}` : ''
 
+const CHANNEL_COLORS = [
+  '#00A8E1', '#E50914', '#1DB954', '#FF6B35', '#7C3AED',
+  '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#EF4444',
+  '#8B5CF6', '#14B8A6', '#F97316', '#06B6D4', '#84CC16',
+]
+const getChannelColor = (name: string) => {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return CHANNEL_COLORS[Math.abs(hash) % CHANNEL_COLORS.length]
+}
+const getChannelInitials = (name: string) => {
+  const words = name.split(/[\s&]+/)
+  return words.slice(0, 2).map(w => w[0]).join('').toUpperCase()
+}
+
 export default function App() {
   const [rows, setRows] = useState<RowData[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,6 +99,7 @@ export default function App() {
   const [trendingAll, setTrendingAll] = useState<TMDBItem[]>([])
   const [searchResults, setSearchResults] = useState<TMDBItem[]>([])
   const [searching, setSearching] = useState(false)
+  const [searchFilter, setSearchFilter] = useState<'all' | 'canais' | 'filmes-series'>('all')
   const [featuredIndex, setFeaturedIndex] = useState(0)
   const heroTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const heroData = rows.slice(4, 7).flatMap(r => r.data).filter((_, i) => i < 5) || []
@@ -143,9 +161,51 @@ export default function App() {
             overview: ch.category,
             media_type: 'canal',
             // Campo customizado para identificar o slug
-            ...({ slug: ch.slug } as any),
+            ...({ slug: toSlug(ch.name) } as any),
           })),
         })
+      }
+
+      // Adiciona eventos esportivos
+      try {
+        const liveEvents = await reidos.getEvents({ status: 'live' })
+        if (!cancelled && liveEvents.length > 0) {
+          allRows.push({
+            categoryId: 'eventos',
+            title: 'EVENTOS • AO VIVO',
+            data: liveEvents.slice(0, 20).map(ev => ({
+              id: ev.id as any,
+              name: ev.title,
+              title: ev.title,
+              poster_path: ev.poster || null,
+              backdrop_path: ev.poster || null,
+              vote_average: 0,
+              overview: `${ev.competition} • ${ev.category}`,
+              media_type: 'event',
+              ...({ eventData: ev } as any),
+            })),
+          })
+        }
+        const upcomingEvents = await reidos.getEvents({ status: 'upcoming' })
+        if (!cancelled && upcomingEvents.length > 0) {
+          allRows.push({
+            categoryId: 'eventos',
+            title: 'EVENTOS • PRÓXIMOS',
+            data: upcomingEvents.slice(0, 20).map(ev => ({
+              id: ev.id as any,
+              name: ev.title,
+              title: ev.title,
+              poster_path: ev.poster || null,
+              backdrop_path: ev.poster || null,
+              vote_average: 0,
+              overview: `${ev.competition} • ${ev.category}`,
+              media_type: 'event',
+              ...({ eventData: ev } as any),
+            })),
+          })
+        }
+      } catch (e) {
+        console.error('Erro ao carregar eventos', e)
       }
 
       if (!cancelled) {
@@ -178,6 +238,7 @@ export default function App() {
 
   // Search via TMDB API
   useEffect(() => {
+    setSearchFilter('all')
     if (!searchTerm.trim()) {
       setSearchResults([])
       return
@@ -192,9 +253,13 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  const handleItemClick = useCallback((item: TMDBItem & { slug?: string }) => {
+  const handleItemClick = useCallback((item: TMDBItem & { slug?: string; eventData?: reidos.EventData }) => {
     if (item.media_type === 'canal') {
-      setPlayerContent({ id: 0, type: 'canal', title: item.name || item.title || '', slug: item.slug })
+      setPlayerContent({ id: 0, type: 'canal', title: item.name || item.title || '', slug: item.slug || toSlug(item.name || item.title || '') })
+      return
+    }
+    if (item.media_type === 'event' && item.eventData) {
+      setPlayerContent({ id: 0, type: 'evento', title: item.title || '', eventData: item.eventData })
       return
     }
     const isMovie = !!item.title || item.media_type === 'movie'
@@ -372,12 +437,69 @@ export default function App() {
                   onClick={() => handleItemClick(item)}
                 >
                   {(item as any).media_type === 'canal' ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#1a242f] to-[#0f171e]">
-                      <Radio size={28} className="text-[#00A8E1]" />
-                      <span className="text-white font-black text-xs text-center px-2 leading-tight">
-                        {(item as any).name || (item as any).title}
-                      </span>
-                      <span className="text-[#00A8E1] text-[9px] font-bold tracking-widest">AO VIVO</span>
+                    <img
+                      src={`https://reidosembeds.com/img/${(item as any).id}.png`}
+                      alt={(item as any).name || ''}
+                      className="w-full h-full object-contain p-2 bg-[#1a242f]"
+                      loading="lazy"
+                      onError={e => {
+                        const name = (item as any).name || ''
+                        const t = e.currentTarget
+                        t.style.display = 'none'
+                        t.insertAdjacentHTML('afterend', `
+                          <div class="w-full h-full flex flex-col items-center justify-center gap-1 bg-[#1a242f]" style="height: 100%">
+                            <div class="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shadow-lg" style="background-color: ${getChannelColor(name)}">
+                              <span class="text-white font-black text-sm md:text-base">${getChannelInitials(name)}</span>
+                            </div>
+                            <span class="text-white font-bold text-[10px] text-center px-1 leading-tight mt-1">${name}</span>
+                            <span class="text-[#00A8E1] text-[8px] font-bold tracking-widest">AO VIVO</span>
+                          </div>
+                        `)
+                      }}
+                    />
+                  ) : (item as any).media_type === 'event' ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a242f] p-1">
+                      {(item as any).eventData?.visual_model === 'versus' ? (
+                        <>
+                          <div className="flex items-center justify-center gap-1 w-full flex-1 min-h-0">
+                            <div className="flex-1 h-full flex items-center justify-center">
+                              {(item as any).eventData?.time1?.startsWith('http') ? (
+                                <img src={(item as any).eventData.time1} alt="" className="max-w-[70%] max-h-[70%] object-contain" loading="lazy" />
+                              ) : (
+                                <span className="text-white font-black text-[9px] text-center leading-tight truncate px-1">{(item as any).eventData?.time1 || ''}</span>
+                              )}
+                            </div>
+                            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-[#00A8E1]/20 flex items-center justify-center">
+                              <span className="text-[#00A8E1] font-black text-[8px]">VS</span>
+                            </div>
+                            <div className="flex-1 h-full flex items-center justify-center">
+                              {(item as any).eventData?.time2?.startsWith('http') ? (
+                                <img src={(item as any).eventData.time2} alt="" className="max-w-[70%] max-h-[70%] object-contain" loading="lazy" />
+                              ) : (
+                                <span className="text-white font-black text-[9px] text-center leading-tight truncate px-1">{(item as any).eventData?.time2 || ''}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-center mt-0.5">
+                            <span className="text-white font-bold text-[8px] leading-tight line-clamp-1">{item.title || item.name}</span>
+                            <span className="text-[#8197a4] text-[6px] block truncate">{(item as any).eventData?.competition || ''}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {(item as any).eventData?.poster ? (
+                            <img src={(item as any).eventData.poster} alt="" className="w-full flex-1 object-cover min-h-0" loading="lazy" />
+                          ) : (
+                            <div className="w-full flex-1 flex items-center justify-center text-[#5a6a78] text-xs font-bold px-2 text-center min-h-0">
+                              {item.title || item.name}
+                            </div>
+                          )}
+                          <div className="text-center mt-0.5">
+                            <span className="text-white font-bold text-[8px] leading-tight line-clamp-1">{item.title || item.name}</span>
+                            <span className="text-[#8197a4] text-[6px] block truncate">{(item as any).eventData?.competition || ''}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : item.poster_path ? (
                     <img src={tmdbImg(item.poster_path)} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -386,12 +508,12 @@ export default function App() {
                       {item.title || item.name}
                     </div>
                   )}
-                  {(item as any).media_type !== 'canal' && (
+                  {(item as any).media_type !== 'canal' && (item as any).media_type !== 'event' && (
                     <div className="absolute top-1.5 right-1.5 bg-black/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] font-bold text-yellow-500 flex items-center gap-1">
                       <Star size={7} fill="currentColor" /> {item.vote_average?.toFixed(1)}
                     </div>
                   )}
-                  {(item as any).media_type === 'canal' && (
+                  {((item as any).media_type === 'canal' || (item as any).media_type === 'event') && (
                     <div className="absolute top-1.5 left-1.5 bg-[#00A8E1] px-1.5 py-0.5 rounded text-[9px] font-bold text-white tracking-wider flex items-center gap-1">
                       <Radio size={8} /> AO VIVO
                     </div>
@@ -427,6 +549,7 @@ export default function App() {
         season={playerContent.season}
         episode={playerContent.episode}
         slug={playerContent.slug}
+        eventData={playerContent.eventData}
         onBack={() => setPlayerContent(null)}
       />
     )
@@ -537,9 +660,26 @@ export default function App() {
       ) : searchTerm ? (
         /* SEARCH RESULTS */
         <main className="max-w-[1600px] mx-auto px-4 md:px-10 py-6 md:py-10">
-          <h2 className="text-white font-black text-sm md:text-lg mb-6">
+          <h2 className="text-white font-black text-sm md:text-lg mb-4">
             RESULTADOS PARA: <span className="text-[#00A8E1]">"{searchTerm}"</span>
           </h2>
+
+          {/* FILTRO DE BUSCA */}
+          <div className="flex items-center gap-2 mb-6">
+            {([{ id: 'all', label: 'Todos' }, { id: 'canais', label: 'Canais' }, { id: 'filmes-series', label: 'Filmes e Séries' }] as const).map(f => (
+              <button
+                key={f.id}
+                onClick={() => setSearchFilter(f.id)}
+                className={`px-3 py-1.5 font-bold text-xs rounded-full transition-all ${
+                  searchFilter === f.id
+                    ? 'bg-[#00A8E1] text-white shadow-lg shadow-[#00A8E1]/30'
+                    : 'bg-[#1a242f] text-[#8197a4] hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
 
           {filteredHistory.length > 0 && (
             <div className="mb-8">
@@ -575,53 +715,8 @@ export default function App() {
             </div>
           )}
 
-          {searching ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-8 h-8 border-3 border-[#00A8E1] border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : searchResults.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
-              {searchResults.filter(item => item.media_type !== 'person').map(item => {
-                const title = item.title || item.name || ''
-                const isMovie = item.media_type === 'movie'
-                return (
-                  <div
-                    key={item.id}
-                    className="group cursor-pointer"
-                    onClick={() => {
-                      setDetailContent({ id: item.id, type: isMovie ? 'movie' : 'tv', label: isMovie ? 'filmes' : 'series' })
-                    }}
-                  >
-                    <div className="relative aspect-[2/3] rounded-lg md:rounded-xl overflow-hidden bg-[#1a242f] transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-[#00A8E1]/15">
-                      {item.poster_path ? (
-                        <img src={tmdbImg(item.poster_path)} alt="" className="w-full h-full object-cover" loading="lazy" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[#5a6a78] text-xs font-bold px-2">{title}</div>
-                      )}
-                      <div className="absolute top-1.5 right-1.5 bg-black/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] font-bold text-yellow-500 flex items-center gap-1">
-                        <Star size={7} fill="currentColor" /> {item.vote_average?.toFixed(1)}
-                      </div>
-                      <div className="absolute top-1.5 left-1.5 bg-[#00A8E1]/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[9px] font-bold text-white">
-                        {isMovie ? 'FILME' : 'SÉRIE'}
-                      </div>
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-[#00A8E1]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <div className="bg-white text-[#0f171e] p-2.5 md:p-3 rounded-full shadow-lg shadow-black/50">
-                          <Play size={16} />
-                        </div>
-                      </div>
-                    </div>
-                    <p className="mt-1.5 text-[10px] md:text-[11px] text-[#8197a4] font-bold truncate">{title}</p>
-                    {item.release_date || item.first_air_date ? (
-                      <p className="text-[#5a6a78] text-[9px] truncate">{(item.release_date || item.first_air_date || '').split('-')[0]}</p>
-                    ) : null}
-                  </div>
-                )
-              })}
-            </div>
-          ) : null}
-
           {/* CANAIS - busca local */}
-          {(() => {
+          {searchFilter !== 'filmes-series' && (() => {
             const q = searchTerm.toLowerCase()
             const found = CHANNELS.filter(c => c.name.toLowerCase().includes(q) || c.category.toLowerCase().includes(q))
             if (found.length === 0) return null
@@ -636,12 +731,28 @@ export default function App() {
                     <div
                       key={ch.id}
                       className="group cursor-pointer"
-                      onClick={() => setPlayerContent({ id: 0, type: 'canal', title: ch.name, slug: ch.slug })}
+                      onClick={() => setPlayerContent({ id: 0, type: 'canal', title: ch.name, slug: toSlug(ch.name) })}
                     >
-                      <div className="relative aspect-[2/3] rounded-lg md:rounded-xl overflow-hidden bg-gradient-to-br from-[#1a242f] to-[#0f171e] transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-[#00A8E1]/15 flex flex-col items-center justify-center gap-2">
-                        <Radio size={28} className="text-[#00A8E1]" />
-                        <span className="text-white font-black text-xs text-center px-2 leading-tight">{ch.name}</span>
-                        <span className="text-[#00A8E1] text-[9px] font-bold tracking-widest">{ch.category}</span>
+                      <div className="relative aspect-[2/3] rounded-lg md:rounded-xl overflow-hidden bg-[#1a242f] transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-[#00A8E1]/15">
+                        <img
+                          src={`https://reidosembeds.com/img/${ch.id}.png`}
+                          alt={ch.name}
+                          className="w-full h-full object-contain p-2"
+                          loading="lazy"
+                          onError={e => {
+                            const t = e.currentTarget
+                            t.style.display = 'none'
+                            t.parentElement!.innerHTML = `
+                              <div class="w-full h-full flex flex-col items-center justify-center gap-1">
+                                <div class="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shadow-lg" style="background-color: ${getChannelColor(ch.name)}">
+                                  <span class="text-white font-black text-sm md:text-base">${getChannelInitials(ch.name)}</span>
+                                </div>
+                                <span class="text-white font-bold text-[10px] text-center px-1 leading-tight mt-1">${ch.name}</span>
+                                <span class="text-[#00A8E1] text-[8px] font-bold tracking-widest">${ch.category}</span>
+                              </div>
+                            `
+                          }}
+                        />
                       </div>
                       <p className="mt-1.5 text-[10px] md:text-[11px] text-[#8197a4] font-bold truncate">{ch.name}</p>
                     </div>
@@ -651,10 +762,65 @@ export default function App() {
             )
           })()}
 
-          {searchResults.length === 0 && (() => {
+          {/* FILMES E SÉRIES (TMDB) */}
+          {searchFilter !== 'canais' && searching ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 border-3 border-[#00A8E1] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : searchResults.length > 0 ? (
+            <>
+              <div className="flex items-center gap-3 mb-4 mt-8">
+                <Play size={14} className="text-[#00A8E1]" />
+                <h3 className="text-[#8197a4] font-bold text-xs md:text-sm">FILMES E SÉRIES</h3>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+                {searchResults.filter(item => item.media_type !== 'person').map(item => {
+                  const title = item.title || item.name || ''
+                  const isMovie = item.media_type === 'movie'
+                  return (
+                    <div
+                      key={item.id}
+                      className="group cursor-pointer"
+                      onClick={() => {
+                        setDetailContent({ id: item.id, type: isMovie ? 'movie' : 'tv', label: isMovie ? 'filmes' : 'series' })
+                      }}
+                    >
+                      <div className="relative aspect-[2/3] rounded-lg md:rounded-xl overflow-hidden bg-[#1a242f] transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-[#00A8E1]/15">
+                        {item.poster_path ? (
+                          <img src={tmdbImg(item.poster_path)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[#5a6a78] text-xs font-bold px-2">{title}</div>
+                        )}
+                        <div className="absolute top-1.5 right-1.5 bg-black/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] font-bold text-yellow-500 flex items-center gap-1">
+                          <Star size={7} fill="currentColor" /> {item.vote_average?.toFixed(1)}
+                        </div>
+                        <div className="absolute top-1.5 left-1.5 bg-[#00A8E1]/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[9px] font-bold text-white">
+                          {isMovie ? 'FILME' : 'SÉRIE'}
+                        </div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-[#00A8E1]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="bg-white text-[#0f171e] p-2.5 md:p-3 rounded-full shadow-lg shadow-black/50">
+                            <Play size={16} />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="mt-1.5 text-[10px] md:text-[11px] text-[#8197a4] font-bold truncate">{title}</p>
+                      {item.release_date || item.first_air_date ? (
+                        <p className="text-[#5a6a78] text-[9px] truncate">{(item.release_date || item.first_air_date || '').split('-')[0]}</p>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : null}
+
+          {(() => {
             const q = searchTerm.toLowerCase()
             const hasChannels = CHANNELS.some(c => c.name.toLowerCase().includes(q))
-            if (hasChannels) return null
+            const hasTmdb = searchResults.length > 0
+            const showChannels = searchFilter !== 'filmes-series' && hasChannels
+            const showTmdb = searchFilter !== 'canais' && hasTmdb
+            if (showChannels || showTmdb) return null
             return (
               <div className="flex flex-col items-center justify-center py-20 text-[#5a6a78]">
                 <Search size={40} className="mb-4" />
