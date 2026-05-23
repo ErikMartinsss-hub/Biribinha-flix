@@ -1,4 +1,4 @@
-const BASE = 'https://superflixapi.online'
+const BASE = 'https://superflixapi.best'
 
 export const getStreamUrl = (type: 'filme' | 'serie', id: number, season?: number, episode?: number) => {
   if (type === 'serie') {

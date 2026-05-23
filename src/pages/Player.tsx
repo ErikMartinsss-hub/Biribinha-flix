@@ -31,7 +31,7 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
     ? (selectedEmbed?.embed_url || '')
     : isChannel
       ? getChannelUrl(slug || '')
-      : `https://superflixapi.online/${isSeries ? `serie/${id}/${activeSeason}/${activeEpisode}` : `filme/${id}`}`
+      : `https://superflixapi.best/${isSeries ? `serie/${id}/${activeSeason}/${activeEpisode}` : `filme/${id}`}`
 
   useEffect(() => {
     if (!isSeries) return
