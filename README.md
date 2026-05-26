@@ -1,73 +1,89 @@
-# React + TypeScript + Vite
+# 🎬 BiribinhaFlix
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Agregador de streaming** — Animes, Filmes, Séries, Canais ao vivo e Eventos especiais, tudo em um só lugar.
 
-Currently, two official plugins are available:
+[![Vercel](https://img.shields.io/badge/deploy-vercel-000?logo=vercel)](https://biribinha-flix.vercel.app)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite)](https://vitejs.dev)
+[![Expo](https://img.shields.io/badge/Expo-54-000020?logo=expo)](https://expo.dev)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Funcionalidades
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- 🔍 **Busca inteligente** — pesquise por filmes, séries e canais com filtro por tipo
+- 📺 **Canais ao vivo** — mais de 100 canais com logos e guia de programação
+- 🎥 **TMDB integrado** — capas, sinopses, elenco e temporadas via API do TMDB
+- 📱 **Multi-plataforma** — Web (Vite + React) e Mobile (React Native + Expo)
+- ⚡ **Player embutido** — assista direto no navegador ou app sem redirecionar
+- 🏠 **Categorias** — Animes, Filmes, Séries, Canais, Eventos
 
-## Expanding the ESLint configuration
+## 🚀 Aplicação Web
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Camada | Tecnologia |
+|--------|-----------|
+| Frontend | React 19 + TypeScript |
+| Build | Vite 6 |
+| Deploy | Vercel (auto-deploy via GitHub) |
+| API de conteúdo | [TMDB](https://www.themoviedb.org/) |
+| API de streams | Superflix API |
+| Canais | Reios Embeds |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Rodar localmente
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Acesse `http://localhost:5173`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Build para produção
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+npm run preview
 ```
+
+## 📱 Aplicativo Mobile (React Native)
+
+O app mobile fica em um [repositório separado](https://github.com/ErikMartinsss-hub/biribinha-flix-app).
+
+```bash
+cd biribinha-flix-app
+npm install
+npx expo start
+```
+
+Escaneie o QR Code com o app **Expo Go** ou pressione `w` para abrir no navegador.
+
+### Stack mobile
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Framework | React Native (Expo SDK 54) |
+| Navegação | @react-navigation (stack) |
+| Player | react-native-webview |
+| API de conteúdo | TMDB + Superflix API |
+
+## 🗺️ Roadmap
+
+- [x] Web app funcional (busca, categorias, player)
+- [x] App mobile com navegação e telas principais
+- [ ] Login / favoritos
+- [ ] Modo offline (cache de capas)
+- [ ] Notificações push para novos episódios
+- [ ] Suporte a Chromecast / AirPlay
+
+## 🛠️ APIs utilizadas
+
+- **[TMDB](https://www.themoviedb.org/)** — catálogo de filmes, séries, capas e metadados
+- **[Superflix API](https://superflixapi.best)** — streams de filmes e séries
+- **[Reios Embeds](https://reidosembeds.com)** — canais ao vivo e eventos
+
+## 📄 Licença
+
+Este projeto é apenas para fins educacionais. Nenhum conteúdo é hospedado diretamente.
