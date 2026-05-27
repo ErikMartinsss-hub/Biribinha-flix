@@ -1,4 +1,4 @@
-# 🎬 BiribinhaFlix
+#  BiribinhaFlix
 
 **Agregador de streaming** — Animes, Filmes, Séries, Canais ao vivo e Eventos especiais, tudo em um só lugar.
 
@@ -10,16 +10,16 @@
 
 ---
 
-## ✨ Funcionalidades
+##  Funcionalidades
 
-- 🔍 **Busca inteligente** — pesquise por filmes, séries e canais com filtro por tipo
-- 📺 **Canais ao vivo** — mais de 100 canais com logos e guia de programação
-- 🎥 **TMDB integrado** — capas, sinopses, elenco e temporadas via API do TMDB
-- 📱 **Multi-plataforma** — Web (Vite + React) e Mobile (React Native + Expo)
-- ⚡ **Player embutido** — assista direto no navegador ou app sem redirecionar
-- 🏠 **Categorias** — Animes, Filmes, Séries, Canais, Eventos
+-  **Busca inteligente** — pesquise por filmes, séries e canais com filtro por tipo
+-  **Canais ao vivo** — mais de 100 canais com logos e guia de programação
+-  **TMDB integrado** — capas, sinopses, elenco e temporadas via API do TMDB
+-  **Multi-plataforma** — Web (Vite + React) e Mobile (React Native + Expo)
+-  **Player embutido** — assista direto no navegador ou app sem redirecionar
+-  **Categorias** — Animes, Filmes, Séries, Canais, Eventos
 
-## 🚀 Aplicação Web
+##  Aplicação Web
 
 ### Stack
 
@@ -48,7 +48,7 @@ npm run build
 npm run preview
 ```
 
-## 📱 Aplicativo Mobile (React Native)
+##  Aplicativo Mobile (React Native)
 
 O app mobile fica em um [repositório separado](https://github.com/ErikMartinsss-hub/biribinha-flix-app).
 
@@ -69,7 +69,7 @@ Escaneie o QR Code com o app **Expo Go** ou pressione `w` para abrir no navegado
 | Player | react-native-webview |
 | API de conteúdo | TMDB + Superflix API |
 
-## 🗺️ Roadmap
+##  Roadmap
 
 - [x] Web app funcional (busca, categorias, player)
 - [x] App mobile com navegação e telas principais
@@ -78,7 +78,7 @@ Escaneie o QR Code com o app **Expo Go** ou pressione `w` para abrir no navegado
 - [ ] Notificações push para novos episódios
 - [ ] Suporte a Chromecast / AirPlay
 
-## 🛠️ APIs utilizadas
+##  APIs utilizadas
 
 - **[TMDB](https://www.themoviedb.org/)** — catálogo de filmes, séries, capas e metadados
 - **[Superflix API](https://superflixapi.best)** — streams de filmes e séries
