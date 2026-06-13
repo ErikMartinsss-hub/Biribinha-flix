@@ -101,7 +101,7 @@ export const CHANNELS: Channel[] = [
   { id: 'woohoo', name: 'Woohoo', category: 'Música' },
 ]
 
-export const getChannelUrl = (slug: string) => `https://superflixapi.best/canal/${slug}`
+export const getChannelUrl = (slug: string) => `https://superflixapi.cyou/canal/${slug}`
 
 export const CHANNEL_CATEGORIES = [
   'Filmes e Séries',
