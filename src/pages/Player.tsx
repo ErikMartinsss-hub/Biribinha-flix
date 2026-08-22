@@ -31,6 +31,7 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
   const [streams, setStreams] = useState<StreamSource[]>([])
   const [streamsError, setStreamsError] = useState(false)
   const [poster, setPoster] = useState<string | undefined>(undefined)
+  const [reloadKey, setReloadKey] = useState(0)
 
   const isSeries = type === 'serie'
   const isChannel = type === 'canal'
@@ -59,7 +60,7 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
       .catch(() => { if (!cancel) setStreamsError(true) })
       .finally(() => { if (!cancel) setLoading(false) })
     return () => { cancel = true }
-  }, [id, activeSeason, activeEpisode, isSeries, isVideo])
+  }, [id, activeSeason, activeEpisode, isSeries, isVideo, reloadKey])
 
   // Poster/backdrop do TMDB para exibir no player
   useEffect(() => {
@@ -199,15 +200,24 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
               <Signal size={40} className="text-red-400 mx-auto mb-4" />
               <h3 className="text-white font-black mb-2">Nenhuma fonte encontrada</h3>
               <p className="text-[#5a6a78] text-sm mb-6">
-                Não encontramos servidores disponíveis para este título agora.
+                Os servidores podem estar instáveis agora. Tente novamente em alguns instantes.
               </p>
-              <button
-                type="button"
-                onClick={onBack}
-                className="bg-[#00A8E1] hover:bg-[#0090c0] text-white font-black text-sm px-6 py-3 rounded-xl transition-colors"
-              >
-                VOLTAR
-              </button>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReloadKey(k => k + 1)}
+                  className="bg-[#00A8E1] hover:bg-[#0090c0] text-white font-black text-sm px-6 py-3 rounded-xl transition-colors"
+                >
+                  TENTAR NOVAMENTE
+                </button>
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="bg-[#1a242f] hover:bg-[#24313d] text-white/80 font-bold text-sm px-6 py-3 rounded-xl transition-colors"
+                >
+                  VOLTAR
+                </button>
+              </div>
             </div>
           ) : (
             <VideoPlayer

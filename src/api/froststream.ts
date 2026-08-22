@@ -63,6 +63,32 @@ function scoreSource(s: StreamSource): number {
   return n
 }
 
+// Busca o JSON de streams em cascata:
+// 1. Proxy serverless na propria Vercel (sem CORS, com retry interno)
+// 2. Chamada direta (funciona se a API liberar CORS)
+// 3. Em dev: proxy publico de CORS
+async function fetchStreamsJson(path: string): Promise<any> {
+  const candidates = [
+    `/api/froststream?path=${encodeURIComponent(path)}`,
+    `${BASE}/${path}`,
+  ]
+  if (import.meta.env.DEV) {
+    candidates.push(`https://corsproxy.io/?url=${encodeURIComponent(`${BASE}/${path}`)}`)
+  }
+
+  let lastErr: unknown
+  for (const url of candidates) {
+    try {
+      const res = await axios.get(url, { timeout: 55000 })
+      if (res.data?.error && !res.data.streams) throw new Error(res.data.detail || res.data.error)
+      return res.data
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('FrostStream indisponivel')
+}
+
 export async function getFrostStreams(
   type: 'filme' | 'serie',
   tmdbId: number,
@@ -80,16 +106,18 @@ export async function getFrostStreams(
   const cached = streamCache.get(path)
   if (cached) return cached
 
-  const res = await axios.get(`${BASE}/stream/${path}.json`, { timeout: 45000 })
-  const raw: FrostStreamRaw[] = res.data?.streams || []
+  const data = await fetchStreamsJson(path)
+  const raw: FrostStreamRaw[] = data?.streams || []
 
-  const sources: StreamSource[] = raw.map(s => ({
-    url: s.url,
-    quality: (s.name || '').replace(/FrostStream/i, '').trim() || 'AUTO',
-    provider: extractProvider(s.title || ''),
-    language: extractLanguage(s.title || ''),
-    headers: s.headers,
-  }))
+  const sources: StreamSource[] = raw
+    .filter(s => s.url)
+    .map(s => ({
+      url: s.url,
+      quality: (s.name || '').replace(/FrostStream/i, '').trim() || 'AUTO',
+      provider: extractProvider(s.title || ''),
+      language: extractLanguage(s.title || ''),
+      headers: s.headers,
+    }))
 
   sources.sort((a, b) => scoreSource(b) - scoreSource(a))
   streamCache.set(path, sources)
