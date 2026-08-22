@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, MonitorPlay, ChevronDown, ChevronUp, Play, Signal, Radio } from 'lucide-react'
 import tmdbApi from '../api/tmdb'
 import { getChannelUrl } from '../data/channels'
+import { getFrostStreams } from '../api/froststream'
+import type { StreamSource } from '../api/froststream'
 import type { EventData, EmbedData } from '../api/reidosembeds'
+import VideoPlayer from '../components/VideoPlayer'
 
 interface PlayerProps {
   id: number
@@ -15,6 +18,8 @@ interface PlayerProps {
   onBack: () => void
 }
 
+const tmdbImg = (path: string | null, size = 'w1280') => path ? `https://image.tmdb.org/t/p/${size}${path}` : undefined
+
 export default function PlayerPage({ id, type, title, season, episode, slug, eventData, onBack }: PlayerProps) {
   const [activeSeason, setActiveSeason] = useState(season ?? 1)
   const [activeEpisode, setActiveEpisode] = useState(episode ?? 1)
@@ -23,15 +28,46 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
   const [showMenu, setShowMenu] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedEmbed, setSelectedEmbed] = useState<EmbedData | null>(null)
+  const [streams, setStreams] = useState<StreamSource[]>([])
+  const [streamsError, setStreamsError] = useState(false)
+  const [poster, setPoster] = useState<string | undefined>(undefined)
 
   const isSeries = type === 'serie'
   const isChannel = type === 'canal'
   const isEvent = type === 'evento'
+  const isVideo = type === 'filme' || isSeries
   const embedUrl = isEvent
     ? (selectedEmbed?.embed_url || '')
     : isChannel
       ? getChannelUrl(slug || '')
-      : `https://superflixapi.cyou/${isSeries ? `serie/${id}/${activeSeason}/${activeEpisode}` : `filme/${id}`}`
+      : ''
+
+  // Busca fontes na API FrostStream (TMDB -> IMDB automaticamente)
+  useEffect(() => {
+    if (!isVideo) return
+    let cancel = false
+    setStreams([])
+    setStreamsError(false)
+    setLoading(true)
+    getFrostStreams(isSeries ? 'serie' : 'filme', id, activeSeason, activeEpisode)
+      .then(s => {
+        if (!cancel) {
+          if (s.length === 0) setStreamsError(true)
+          else setStreams(s)
+        }
+      })
+      .catch(() => { if (!cancel) setStreamsError(true) })
+      .finally(() => { if (!cancel) setLoading(false) })
+    return () => { cancel = true }
+  }, [id, activeSeason, activeEpisode, isSeries, isVideo])
+
+  // Poster/backdrop do TMDB para exibir no player
+  useEffect(() => {
+    if (!isVideo) return
+    tmdbApi.get(`/${isSeries ? 'tv' : 'movie'}/${id}`).then(res => {
+      setPoster(tmdbImg(res.data.backdrop_path || res.data.poster_path))
+    }).catch(() => {})
+  }, [id, isSeries, isVideo])
 
   useEffect(() => {
     if (!isSeries) return
@@ -50,9 +86,9 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
     })
   }, [id, activeSeason, isSeries])
 
-  // Retorna janela fake no window.open + aplica sandbox apos o video carregar
+  // Bloqueia popups e aplica sandbox nos IFRAMES (canais/eventos)
   useEffect(() => {
-    if (!embedUrl) return
+    if (isVideo) return
     const origOpen = window.open.bind(window)
     window.open = () => {
       const win: any = {
@@ -69,8 +105,6 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
       return win
     }
 
-    // Aplica sandbox no iframe apos o video ja ter carregado
-    // Isso bloqueia popups sem impedir o video de iniciar
     const timer = setTimeout(() => {
       const iframe = document.querySelector('iframe')
       if (iframe && !iframe.hasAttribute('sandbox')) {
@@ -82,7 +116,7 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
       window.open = origOpen
       clearTimeout(timer)
     }
-  }, [embedUrl])
+  }, [embedUrl, isVideo])
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -153,7 +187,37 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
 
       {/* PLAYER AREA */}
       <div className="flex-1 relative bg-black flex items-center justify-center">
-        {isEvent && !selectedEmbed ? (
+        {isVideo ? (
+          /* PLAYER PROPRIO - FROSTSTREAM (sem iframe) */
+          loading ? (
+            <div className="flex flex-col items-center gap-3 z-10">
+              <div className="w-10 h-10 border-4 border-[#00A8E1] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[#5a6a78] text-sm font-bold">Buscando fontes...</p>
+            </div>
+          ) : streamsError || streams.length === 0 ? (
+            <div className="text-center p-8 max-w-md">
+              <Signal size={40} className="text-red-400 mx-auto mb-4" />
+              <h3 className="text-white font-black mb-2">Nenhuma fonte encontrada</h3>
+              <p className="text-[#5a6a78] text-sm mb-6">
+                Não encontramos servidores disponíveis para este título agora.
+              </p>
+              <button
+                type="button"
+                onClick={onBack}
+                className="bg-[#00A8E1] hover:bg-[#0090c0] text-white font-black text-sm px-6 py-3 rounded-xl transition-colors"
+              >
+                VOLTAR
+              </button>
+            </div>
+          ) : (
+            <VideoPlayer
+              sources={streams}
+              poster={poster}
+              title={title}
+              subtitle={isSeries ? `Temporada ${activeSeason} · Episódio ${activeEpisode}` : undefined}
+            />
+          )
+        ) : isEvent && !selectedEmbed ? (
           /* EMBED PROVIDER SELECTION */
           <div className="w-full max-w-4xl mx-auto px-4 py-8">
             <div className="mb-8 text-center">
@@ -195,9 +259,10 @@ export default function PlayerPage({ id, type, title, season, episode, slug, eve
             )}
           </div>
         ) : (
+          /* IFRAME - canais e eventos */
           <>
             <iframe
-              key={isEvent ? (selectedEmbed?.slug || '') : `${activeSeason}-${activeEpisode}`}
+              key={isEvent ? (selectedEmbed?.slug || '') : `canal-${slug}`}
               src={embedUrl}
               className="absolute inset-0 w-full h-full border-0"
               allowFullScreen
